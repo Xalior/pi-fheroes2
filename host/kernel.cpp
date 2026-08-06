@@ -47,7 +47,15 @@
 // fheroes2's entry point. It is main() in the upstream source; the build
 // renames it for that one translation unit, because main() here belongs to
 // the Circle kernel.
-extern "C" int fheroes2_main(int argc, char **argv);
+//
+// Declared with ORDINARY C++ LINKAGE, not extern "C". main() is the one
+// function a C++ compiler gives an unmangled name to no matter what, and the
+// rename is a preprocessor substitution made before the compiler ever sees
+// the definition — so what upstream's translation unit actually defines is a
+// plain C++ function at global scope, and its symbol is mangled. An extern
+// "C" declaration here would ask the linker for an unmangled name that no
+// object defines.
+int fheroes2_main(int argc, char **argv);
 
 void CGlueStdioInit(CConsole &rConsole);
 
