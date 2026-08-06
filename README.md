@@ -74,6 +74,24 @@ does, not what has been observed.
 - Every one of the above claims is a reading of the code. The port has been
   compiled and linked; it has not been seen to render a frame.
 
+## What the SDL2 layer owes this port
+
+**This is a debt, and it is written down here so that it cannot ship
+quietly.** Three files in `host/` supply parts of SDL2 and SDL_mixer that
+circle-libsdl2 does not have yet. They belong in the library, where every
+game reaches them, and not here, where only this one does. Each is deleted
+when the library grows the real thing — that deletion is the finished state,
+and this section is what remembers it.
+
+| File | What it stands in for |
+|---|---|
+| `sdl_mixer_absent.cpp`, `sdl2ext/SDL_mixer.h` | The whole of SDL_mixer. It implements nothing: `Mix_OpenAudio` refuses to open a device and gives a reason, so the game's audio subsystem stops there and **the game runs in silence**. Heroes II's music is MIDI, so a real answer needs a synthesiser and not only a mixer. |
+| `circle_stubs.cpp` | Twenty-four SDL2 entry points, mostly around 8-bit paletted surfaces and pixel formats — `SDL_MapRGB`, `SDL_AllocFormat`, `SDL_ConvertSurface`, `SDL_SetPaletteColors`, `SDL_CreateTextureFromSurface` and the rest — plus window and renderer calls the game makes that this display cannot honour. |
+
+Nothing in `host/` should be named `SDL_`, `IMG_`, `Mix_` or `TTF_`. Where
+one of those names appears here, it is recorded above as work waiting to move
+into the library, not as a design.
+
 ## What you need to supply
 
 **This repository contains no Heroes of Might and Magic II data, and cannot.**
@@ -91,19 +109,44 @@ You need, at a minimum:
 
 Where to get them legitimately:
 
-- **The official demo.** New World Computing released a demo of Heroes II in
-  1996 and it has been freely distributed ever since. It carries a complete
-  `HEROES2.AGG` and one playable scenario, which is enough to start the game
-  and play a map. fheroes2 ships a script that downloads it —
-  `script/demo/download_demo_version.sh` in the submodule — with the archive's
-  checksum written into the script, so you can confirm you got what the
-  project expects.
+- **The official demo, and `make media` fetches it for you.** New World
+  Computing released a demo of Heroes II in 1996 and it has been freely
+  distributed ever since. It carries a complete `HEROES2.AGG` and one playable
+  scenario, which is enough to start the game and play a map. See
+  [The demo, and `make media`](#the-demo-and-make-media) below.
 - **The full game.** Use the copy inside a version you own. The original CD,
   and the GOG release, both install these files as plain files; copying them
   to the card is all that is needed.
 
 Do not use a copy obtained by working around a licence, a paywall or a
 copy-protection system. There is a free and complete-enough option above.
+
+### The demo, and `make media`
+
+```sh
+make media
+```
+
+This downloads the 1996 demo into `media/`, and it is the only target in this
+repository that downloads anything at all.
+
+| | |
+|---|---|
+| **What it fetches** | `h2demo.zip`, the official New World Computing / 3DO demo of *Heroes of Might and Magic II: The Succession Wars*. |
+| **From where** | `https://archive.org/download/HeroesofMightandMagicIITheSuccessionWars_1020/h2demo.zip` |
+| **Under what terms** | The demo was distributed freely to promote the retail game and is still hosted on those terms. It is **not** the retail data, and this repository does not redistribute it. |
+| **How it is verified** | Against a published SHA256. The URL and the checksum are both copied from fheroes2's own `script/demo/download_demo_version.sh`, so the integrity check is upstream's, made for this exact archive — not one invented here. A mismatch stops the target and the file is never staged. |
+
+It unpacks the archive's `DATA/` and `MAPS/` into `media/data/` and
+`media/maps/`, discards the Windows installer and its DLLs, which fheroes2
+has no use for, and writes `media/provenance.txt` recording the URL, the
+date, the checksum and the licence.
+
+Re-running it verifies what is already there instead of downloading again.
+`media/` is not tracked by git and no build target deletes it.
+
+If you own the retail game, you do not need this: put your own `HEROES2.AGG`
+in `media/data/` and `make card` will stage it exactly the same way.
 
 ### Where the files go
 
@@ -112,14 +155,19 @@ laid out the way fheroes2 lays it out everywhere else:
 
 ```
 /games/fheroes2/
-    fheroes2.cfg              the game's settings (staged by `make card`)
-    data/HEROES2.AGG          you supply
-    data/HEROES2X.AGG         you supply, expansion only
-    maps/*.MP2               you supply
+    fheroes2.cfg             the game's settings (staged by `make card`)
+    data/HEROES2.AGG         from media/, or supplied by you
+    data/HEROES2X.AGG        you supply, expansion only
+    maps/*.MP2               from media/, or supplied by you
     maps/*.fh2m              scenarios written for fheroes2 (staged)
     files/data/*.h2d         fheroes2's own asset files (staged)
     files/save/              save games, created by the game
 ```
+
+`make card` builds exactly that layout under `build/sd-card/`, and the kernel
+enters `/games/fheroes2` before the game starts, so every relative path the
+game opens lands inside it. One card carries several games, and nothing of
+this port's ever touches the card's root.
 
 ## Building
 
@@ -133,6 +181,8 @@ cd pi-fheroes2
 make deps       # long: builds newlib and libc++ from source, once per board
 make kernels    # the three board images
 make verify     # confirms each image exists and is not empty
+make media      # the freely distributed 1996 demo data
+make card       # stages the card, data included if media/ has any
 ```
 
 `make deps` is the slow step, and it is slow once. It builds a complete C and
@@ -171,22 +221,23 @@ make card
 
 That stages the card into `build/sd-card/` for you to copy onto FAT32 media:
 the three kernel images under the names each board's firmware looks for, the
-boot configuration, the game's settings, and the data files fheroes2 ships
-itself and is free to redistribute.
+boot configuration, the game's settings, the data files fheroes2 ships itself
+and is free to redistribute, and whatever `media/` holds.
 
-Two things are not staged and have to be added by hand:
+**`make card` never downloads anything**, and it does not depend on `make
+media`. Run without the data it stages a complete card except for the game's
+files and names what is missing, which is a legitimate build and is what
+continuous integration produces.
 
-1. **The Raspberry Pi firmware files** — `bootcode.bin`, `start*.elf`,
-   `fixup*.dat` and, for the Pi 4, `armstub8-rpi4.bin`. Take them from a
-   Raspberry Pi OS card or from the
-   [firmware repository](https://github.com/raspberrypi/firmware).
-2. **The Heroes of Might and Magic II data**, in `fheroes2/data/` and
-   `fheroes2/maps/`. See above.
+One thing is never staged and has to be added by hand: **the Raspberry Pi
+firmware files** — `bootcode.bin`, `start*.elf`, `fixup*.dat` and, for the
+Pi 4, `armstub8-rpi4.bin`. Take them from a Raspberry Pi OS card or from the
+[firmware repository](https://github.com/raspberrypi/firmware).
 
 ### The settings file
 
-`fheroes2/fheroes2.cfg` is staged with settings this port needs, and each one
-is commented in the file itself. Two are worth knowing about:
+`games/fheroes2/fheroes2.cfg` is staged with settings this port needs, and
+each one is commented in the file itself. Two are worth knowing about:
 
 - **Both volumes are zero**, because there is no sound. Turning them up
   changes nothing that can be heard.
@@ -226,8 +277,8 @@ game wants, because a slowed processor drops frames.
 |---|---|
 | `kernel.cpp`, `kernel.h`, `main.cpp` | The Circle kernel: brings up the serial console, the SD card and the filesystem, elects the three cores, and calls the game. |
 | `circle_syscalls.cpp` | Puts the SD card underneath the C library in a way that is legal from a core that does not own the hardware. |
-| `circle_stubs.cpp` | The handful of SDL2 calls fheroes2 makes that the SDL2 layer does not implement. |
-| `sdl_mixer_absent.cpp`, `sdl2ext/SDL_mixer.h` | What stands where SDL_mixer would be. |
+| `circle_stubs.cpp` | SDL2 calls fheroes2 makes that the SDL2 layer does not implement yet. **A debt** — see [What the SDL2 layer owes this port](#what-the-sdl2-layer-owes-this-port). |
+| `sdl_mixer_absent.cpp`, `sdl2ext/SDL_mixer.h` | What stands where SDL_mixer would be. **A debt**, as above. |
 | `sdl2ext/endian.h` | The byte-order header POSIX names, which newlib spells differently. |
 | `defaults.cpp`, `defaults.h`, `defaultsblock.h`, `fheroes2-defaults.ld` | The block of text inside the image that a boot loader can write switches into without rebuilding anything. |
 | `config.txt`, `cmdline.txt` | Firmware boot configuration, one file for all three boards. |
