@@ -246,16 +246,17 @@ card: kernels
 	@echo "  STAGED $(CARD_DIR)/"
 	@if [ -d "$(MEDIA_DIR)/data" ]; then \
 		cp $(MEDIA_DIR)/data/* $(CARD_GAME)/data/ 2>/dev/null || true; \
-		for f in $(CARD_GAME)/data/*; do \
-			[ -f "$$f" ] && echo "  DATA   `basename $$f`"; \
-		done; \
 	fi
 	@if [ -d "$(MEDIA_DIR)/maps" ]; then \
 		cp $(MEDIA_DIR)/maps/* $(CARD_GAME)/maps/ 2>/dev/null || true; \
-		for f in $(CARD_GAME)/maps/*.MP2 $(CARD_GAME)/maps/*.mp2; do \
-			[ -f "$$f" ] && echo "  MAP    `basename $$f`"; \
-		done; \
 	fi
+	@for f in $(CARD_GAME)/data/*; do \
+		if [ -f "$$f" ]; then echo "  DATA   `basename $$f`"; fi; \
+	done; \
+	for f in $(CARD_GAME)/maps/*; do \
+		if [ -f "$$f" ]; then echo "  MAP    `basename $$f`"; fi; \
+	done; \
+	exit 0
 	@echo
 	@if [ -f "$(CARD_GAME)/data/HEROES2.AGG" ] \
 	   || [ -f "$(CARD_GAME)/data/heroes2.agg" ]; then :; else \
