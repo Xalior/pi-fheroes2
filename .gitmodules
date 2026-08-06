@@ -1,0 +1,9 @@
+[submodule "circle-libsdl2"]
+	path = circle-libsdl2
+	url = https://github.com/Xalior/circle-libsdl2.git
+[submodule "fheroes2"]
+	path = fheroes2
+	url = https://github.com/ihhub/fheroes2.git
+[submodule "zlib"]
+	path = zlib
+	url = https://github.com/madler/zlib.git
