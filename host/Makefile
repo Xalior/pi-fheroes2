@@ -64,10 +64,10 @@ TARGET = $(OBJDIR)/$(IMAGE)
 # Sources
 # ---------------------------------------------------------------------------
 
-# The kernel wrapper, the syscall layer, this port's own SDL layer, and the
-# stand-in for SDL_mixer: C++, and this project's own code.
-HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp \
-	circle_stubs.cpp sdl_mixer_absent.cpp
+# The kernel wrapper and the syscall layer: C++, and this project's own code.
+# There is no SDL layer here — circle-libsdl2 implements SDL2, SDL_image and
+# SDL_mixer, and anything this port added would be a second copy of them.
+HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
 # fheroes2's own source list, taken the way upstream's CMakeLists takes it:
@@ -146,10 +146,6 @@ DEFINE += -DFHEROES2_DATA=$(RAPI_GAME_DIR)
 # the path in its own right alongside the SDL2/-prefixed one this project's
 # own code uses.
 #
-# sdl2ext/ carries this port's SDL_mixer.h: the declarations fheroes2 needs
-# from a library that does not exist on this board (see
-# sdl_mixer_absent.cpp).
-#
 # The game's own directories are on the path the way its build system puts
 # them there: src/engine for the engine headers, every immediate
 # subdirectory of src/fheroes2 for the game's, and libsmacker for the video
@@ -201,11 +197,15 @@ FH2_CPPFLAGS = -I $(CURDIR)/fh2compat $(CPPFLAGS)
 
 # The shim comes in whole, every member, rather than only the members the
 # link happens to need. An object file linked straight into the kernel beats
-# an archive member of the same name and does it silently, so a stub in
-# circle_stubs.cpp left behind after the library implemented the real thing
-# would quietly win — the game would keep calling the stub and nothing would
-# say so. Pulling the archive in whole turns that into a duplicate-symbol
-# error at link time, which is the only moment it can still be cheap to fix.
+# an archive member of the same name and does it silently, so a stub left
+# behind here after the library implemented the real thing would quietly win
+# — the game would keep calling the stub and nothing would say so. Pulling
+# the archive in whole turns that into a duplicate-symbol error at link
+# time, which is the only moment it can still be cheap to fix.
+#
+# That is what it did: the port's own SDL layer and its stand-in for
+# SDL_mixer were both named this way when the library grew the real
+# implementations, and both are now gone.
 LIBS = --whole-archive $(SHIM)/libSDL2-$(RAPI_BOARD).a --no-whole-archive \
 	$(CIRCLE_STDLIB_LIBS)
 
