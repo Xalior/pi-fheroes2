@@ -119,7 +119,18 @@ ZLIB_SRCS = adler32.c compress.c crc32.c deflate.c infback.c inffast.c \
 	inflate.c inftrees.c trees.c uncompr.c zutil.c
 ZLIB_OBJS = $(addprefix $(OBJDIR)/zlib/,$(ZLIB_SRCS:.c=.o))
 
-OBJS = $(HOST_OBJS) $(FH2_OBJS) $(SMACKER_OBJS) $(ZLIB_OBJS)
+# The SD card's read cache, which lives in circle-libsdl2 rather than here.
+#
+# It is not part of SDL and does not use it: it is Circle device-layer code
+# that wraps the card and is picked up by name, so FatFs and every file the
+# game opens go through it without knowing. It is kept in that repository
+# because that is where the shared pieces are today, and it is compiled
+# straight into this kernel — there is no library to link, and no other port
+# has to agree with this one about how it is built.
+DISKCACHE_DIR = $(SHIM)/circle-diskcache
+DISKCACHE_OBJ = $(OBJDIR)/diskcache.o
+
+OBJS = $(HOST_OBJS) $(DISKCACHE_OBJ) $(FH2_OBJS) $(SMACKER_OBJS) $(ZLIB_OBJS)
 
 # fheroes2 is written to the 2017 standard and says so in its CMakeLists.
 STANDARD = -std=gnu++17
@@ -187,6 +198,7 @@ FH2_INCLUDE_DIRS = $(FH2)/src/engine \
 
 INCLUDE := -I $(SHIM)/include -I $(SHIM)/include/SDL2 \
 	-I $(CURDIR)/sdl2ext \
+	-I $(DISKCACHE_DIR) \
 	$(addprefix -I ,$(FH2_INCLUDE_DIRS)) \
 	-I $(ZLIB) \
 	$(CIRCLE_STDLIB_INCLUDES) $(INCLUDE)
@@ -279,6 +291,16 @@ $(OBJDIR)/%.o: %.cpp | $(OBJDIR)
 
 $(OBJDIR)/%.d: %.cpp | $(OBJDIR)
 	@$(CPP) $(CPPFLAGS) -M -MG -MT $(@:.d=.o) -MT $@ -MF $@ $<
+
+# The disk cache, which lives outside this directory. Its own rule because
+# the pattern rule above only reaches sources beside this makefile, and its
+# object goes in this board's tree like every other.
+$(DISKCACHE_OBJ): $(DISKCACHE_DIR)/diskcache.cpp | $(OBJDIR)
+	@echo "  CPP   $@"
+	@$(CPP) $(CPPFLAGS) -c -o $@ $<
+
+$(OBJDIR)/diskcache.d: $(DISKCACHE_DIR)/diskcache.cpp | $(OBJDIR)
+	@$(CPP) $(CPPFLAGS) -M -MG -MT $(DISKCACHE_OBJ) -MT $@ -MF $@ $<
 
 # fheroes2's objects, mirroring its source tree under $(OBJDIR)/fh2/. The
 # source tree itself is the upstream submodule, and is never written to.
