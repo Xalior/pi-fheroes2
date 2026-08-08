@@ -215,6 +215,12 @@ drops frames.
 
 If your fan is wired somewhere else, change the pin number.
 
+The same file also configures the keyboard layout. Circle defaults to US, but can read UK, German, Spanish, French, Italian or Dvorak keyboards. Add `keymap=` to the line to set one:
+
+    keymap=uk
+
+The available values are: `us` (default), `uk`, `de`, `es`, `fr`, `it`, `dv` (Dvorak). Cards are built without a preset, so you choose your own layout when you write one.
+
 ## License
 
 The code in this repository — the kernel layer in `host/` and the build — is
