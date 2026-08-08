@@ -22,75 +22,29 @@ pinned at an upstream release, and the build reads it without ever writing to
 it. Where the game needs something the SDL2 layer does not provide, this
 repository supplies it in `host/` rather than changing the game.
 
-Three processor cores are given separate work:
+![Heroes II on a Raspberry Pi 5 with no operating system](docs/fheroes2-on-bare-metal.jpg)
 
-- **Core 0** owns the hardware. Circle's world lives here — interrupts, USB,
-  the SD card, sound — and no other core touches a device.
-- **Core 1** runs the game and nothing else.
-- **Core 2** puts finished frames on the screen. The game draws at 640x480,
-  the size Heroes II was drawn for, and never learns the display's size; the
-  picture is scaled once, at the end, onto whatever the screen is really
-  showing.
+*The title screen, captured from the Pi 5's HDMI output. The board is running
+this image and nothing else — no kernel underneath it, no window system, no
+launcher.*
 
-## State of this port
+The game draws at 640x480, the size Heroes II was drawn for, and the picture
+is scaled once onto whatever your screen actually is.
 
-This is an early port. It builds and links completely, for all three boards,
-and **it has not yet been run on hardware.** The list below is what the code
-does, not what has been observed.
+## What works
 
-**Present:**
+The game starts, reads its data from the card and draws — the screenshot above
+is its own output. The menus respond to the mouse.
 
-- Video: the game's full rendering path, from its own 8-bit picture through a
-  32-bit surface to the screen, scaled to the attached display.
-- Mouse: circle-libsdl2 drives a USB mouse — motion, buttons and wheel, with
-  the pointer position kept and clamped to the window. The game is
-  mouse-driven throughout, so this is the input that matters, and **it has
-  never been exercised on hardware by this port or any other.** It is
-  implemented, not proven.
-- Keyboard: USB keyboards through Circle's HID driver.
-- Files: the game data, the maps, the configuration, the save games and the
-  high scores, read from and written to the SD card.
+**Playing a full game has not been confirmed on hardware.** Everything past
+the menus is untried rather than known to work, and this is the port to be
+sceptical about.
 
-**Absent, and why:**
+What is missing:
 
-- **Sound and music.** Heroes II's music is MIDI and its sound effects are
-  mixed together by SDL_mixer, which is a separate library from SDL2 and which
-  circle-libsdl2 does not provide. fheroes2 has no build switch for going
-  without it, so this repository supplies the declarations the game compiles
-  against and an implementation that reports there is no audio device. The
-  game's own audio subsystem treats that as fatal to itself alone: it stops
-  there, says so on the serial console, and the rest of the game runs in
-  silence. The underlying audio output does exist — circle-libsdl2 implements
-  SDL's own audio API — so what is missing is a mixer and a MIDI synthesiser
-  between the two.
-- **Screenshots, and loading an image from the card.** Both need an 8-bit
-  paletted surface, and circle-libsdl2's surfaces are 32-bit only. Both report
-  the failure and neither is on a path the game plays through.
-- **The map editor's image import.** Same reason as above.
-- **Network play.** fheroes2 has none, so nothing is missing here.
-
-**Not exercised:**
-
-- Every one of the above claims is a reading of the code. The port has been
-  compiled and linked; it has not been seen to render a frame.
-
-## What the SDL2 layer owes this port
-
-**This is a debt, and it is written down here so that it cannot ship
-quietly.** Three files in `host/` supply parts of SDL2 and SDL_mixer that
-circle-libsdl2 does not have yet. They belong in the library, where every
-game reaches them, and not here, where only this one does. Each is deleted
-when the library grows the real thing — that deletion is the finished state,
-and this section is what remembers it.
-
-| File | What it stands in for |
-|---|---|
-| `sdl_mixer_absent.cpp`, `sdl2ext/SDL_mixer.h` | The whole of SDL_mixer. It implements nothing: `Mix_OpenAudio` refuses to open a device and gives a reason, so the game's audio subsystem stops there and **the game runs in silence**. Heroes II's music is MIDI, so a real answer needs a synthesiser and not only a mixer. |
-| `circle_stubs.cpp` | Twenty-four SDL2 entry points, mostly around 8-bit paletted surfaces and pixel formats — `SDL_MapRGB`, `SDL_AllocFormat`, `SDL_ConvertSurface`, `SDL_SetPaletteColors`, `SDL_CreateTextureFromSurface` and the rest — plus window and renderer calls the game makes that this display cannot honour. |
-
-Nothing in `host/` should be named `SDL_`, `IMG_`, `Mix_` or `TTF_`. Where
-one of those names appears here, it is recorded above as work waiting to move
-into the library, not as a design.
+- **Sound and music.** The game runs in silence.
+- **Screenshots and image import.** The map editor's image import and the
+  screenshot key both fail.
 
 ## What you need to supply
 
@@ -247,17 +201,19 @@ each one is commented in the file itself. Two are worth knowing about:
 fheroes2 rewrites this file when it exits, so a change made on the card is the
 starting point rather than a permanent setting.
 
-### The thermal settings in `cmdline.txt`
+### Keeping it cool
 
-One card boots any of the three boards, so all three read the same
-`cmdline.txt`. It carries `socmaxtemp=70`, the temperature in degrees Celsius
-at which the processor is slowed down to cool itself.
+The card carries `cmdline.txt`, which sets the temperature the board is
+allowed to reach and the pin its fan is on:
 
-If your board has a fan, add `gpiofanpin=` and the GPIO pin it is wired to —
-`gpiofanpin=45` is a Raspberry Pi 5 Case Fan or Active Cooler. Naming a fan
-pin changes what happens at that temperature: the fan is switched on and the
-processor is left at full speed, instead of being slowed down. That is what a
-game wants, because a slowed processor drops frames.
+    socmaxtemp=70 gpiofanpin=45
+
+Pin 45 is the Raspberry Pi 5 Case Fan and Active Cooler. With a fan named,
+reaching 70°C switches the fan on and the processor keeps running at full
+speed. Without one it would be slowed down instead, and a slowed processor
+drops frames.
+
+If your fan is wired somewhere else, change the pin number.
 
 ## License
 
